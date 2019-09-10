@@ -1,0 +1,18 @@
+FROM adoptopenjdk/openjdk8-openj9 AS build
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/' /etc/apt/sources.list
+RUN apt-get update
+RUN apt-get install -y \
+    git \
+    maven
+WORKDIR /tmp
+RUN git clone https://github.com/spring-projects/spring-petclinic.git
+WORKDIR /tmp/spring-petclinic
+RUN mvn install
+
+FROM adoptopenjdk/openjdk8-openj9:jre8u222-b10_openj9-0.15.1-alpine
+COPY --from=build /tmp/spring-petclinic/target/spring-petclinic-2.1.0.BUILD-SNAPSHOT.jar spring-petclinic-2.1.0.BUILD-SNAPSHOT.jar
+
+# Start and stop the JVM to pre-warm the class cache
+RUN /bin/sh -c 'java -Xscmx50M -Xshareclasses -Xquickstart -jar spring-petclinic-2.1.0.BUILD-SNAPSHOT.jar &' ; sleep 20 ; ps aux | grep java | grep petclinic | awk '{print $1}' | xargs kill -1
+
+CMD ["java","-Xscmx50M","-Xshareclasses","-Xquickstart", "-jar","spring-petclinic-2.1.0.BUILD-SNAPSHOT.jar"]
